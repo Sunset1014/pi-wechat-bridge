@@ -30,10 +30,6 @@ function sha1(text) {
   return crypto.createHash("sha1").update(text).digest("hex").slice(0, 12);
 }
 
-function delay(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 export class PiRpcClient {
   /**
    * @param {object} opts
@@ -90,6 +86,21 @@ export class PiRpcClient {
     proc.stdout.on("end", () => {
       this._buffer += this._decoder.end();
       this._drain();
+    });
+    // 转发 stderr 到日志（启动失败等原因可直接看到）
+    proc.stderr.setEncoding("utf8");
+    let errBuf = "";
+    proc.stderr.on("data", (chunk) => {
+      errBuf += chunk;
+      let idx;
+      while ((idx = errBuf.indexOf("\n")) !== -1) {
+        const line = errBuf.slice(0, idx).replace(/\r$/, "");
+        errBuf = errBuf.slice(idx + 1);
+        if (line.trim()) this.onLog(`[pi:stderr] ${line}`);
+      }
+    });
+    proc.stderr.on("end", () => {
+      if (errBuf.trim()) this.onLog(`[pi:stderr] ${errBuf.trim()}`);
     });
     proc.on("error", (err) => this._onExit(`启动失败: ${err.message}`));
     proc.on("exit", (code, signal) => {
@@ -207,18 +218,27 @@ export class PiRpcClient {
     const settled = new Promise((resolve, reject) => {
       this._settleWaiters.push({ resolve, reject });
     });
+    // 防止子进程退出时 settled 被 reject 但无人 await，变成 unhandled rejection 打崩进程
+    settled.catch(() => {});
     const cmd = { type: "prompt", message: text, streamingBehavior: "followUp" };
     if (images?.length) cmd.images = images;
 
     const resp = await this.command(cmd);
     if (!resp.success) throw new Error(resp.error || "prompt 被拒绝");
 
-    await Promise.race([
-      settled,
-      delay(this.promptTimeoutMs).then(() => {
-        throw new Error(`pi 处理超时（>${Math.round(this.promptTimeoutMs / 60000)} 分钟）`);
-      }),
-    ]);
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`pi 处理超时（>${Math.round(this.promptTimeoutMs / 60000)} 分钟）`)),
+        this.promptTimeoutMs,
+      );
+    });
+    timeout.catch(() => {});
+    try {
+      await Promise.race([settled, timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
 
     const last = await this.command({ type: "get_last_assistant_text" });
     return last.data?.text ?? "";
