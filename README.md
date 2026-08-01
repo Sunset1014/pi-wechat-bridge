@@ -53,6 +53,7 @@ npm start
 | `IDLE_TIMEOUT_MIN` | `30` | 会话空闲回收（分钟） |
 | `PROMPT_TIMEOUT_MIN` | `20` | 单次任务超时（分钟） |
 | `REPLY_CHUNK` | `1500` | 回复分片长度（字符） |
+| `ALLOWED_CONVERSATIONS` | 空 | 会话 ID 白名单（逗号分隔，ID 见启动日志 `[xxxx…]` 部分）。**建议设置**：留空 = 任何会话都能命令 pi |
 | `DEBUG` | `0` | 详细日志 |
 
 示例：让 pi 在 `~/Code/my-project` 下工作
@@ -63,14 +64,16 @@ PI_CWD=/c/Users/Eternity/PersonalFiles/Code/my-project npm start
 
 ## 安全须知
 
-- pi 拥有本机完整 shell 权限，微信消息 = 远程命令执行。**只在自己与 ClawBot 的私聊中使用**，不要拉进群聊、不要借号。
+- pi 拥有本机完整 shell 权限，微信消息 = 远程命令执行。**务必设置 `ALLOWED_CONVERSATIONS` 白名单**（启动日志里 `[o9cq802Kto…]` 那段就是会话 ID），防止群聊/陌生人触发你的 pi。
 - 危险命令默认自动拒绝（`AUTO_CONFIRM=1` 可改为自动确认，风险自负）。
 - 会话文件保存在 pi 的默认 session 目录（`~/.pi/agent/sessions/`），含对话内容，注意隐私。
 
 ## 已知限制
 
-- 主动发送进度提示（"⏳ pi 处理中…"）依赖微信下发的 `context_token`，需至少收到过一条消息，且 token 约 24 小时过期（收到新消息自动续）。
-- 语音回复、视频回复暂不支持（文本回复为主）。
+- 多个会话的消息**串行处理**（SDK 层限制）：A 会话任务未完成时，B 会话消息会排队等待
+- 内置斜杠命令 `/echo`、`/toggle-debug` 被 SDK 占用，pi 收不到；`/kit-backup` 等其他斜杠命令正常透传
+- 主动发送进度提示（"⏳ pi 处理中…"）依赖微信下发的 `context_token`，需至少收到过一条消息，且 token 约 24 小时过期（收到新消息自动续）
+- 语音回复、视频回复暂不支持（文本回复为主）
 
 ## License
 

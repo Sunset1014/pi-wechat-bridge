@@ -236,6 +236,13 @@ export class PiRpcClient {
     timeout.catch(() => {});
     try {
       await Promise.race([settled, timeout]);
+    } catch (err) {
+      // 超时：主动 abort，避免残留任务阻塞后续消息
+      if (String(err.message).includes("超时")) {
+        this.onLog("[pi] 任务超时，发送 abort 取消…");
+        await this.command({ type: "abort" }).catch(() => {});
+      }
+      throw err;
     } finally {
       clearTimeout(timer);
     }

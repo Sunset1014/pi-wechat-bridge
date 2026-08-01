@@ -18,6 +18,7 @@ import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { PiPool } from "./pi-rpc.mjs";
+import { detectImageMime } from "./util.mjs";
 
 const DEFAULT_CWD = path.join(os.homedir(), "PersonalFiles", "Code");
 
@@ -29,7 +30,11 @@ const config = {
   promptTimeoutMs: Number(process.env.PROMPT_TIMEOUT_MIN ?? 20) * 60_000,
   chunk: Number(process.env.REPLY_CHUNK ?? 1500),
   debug: process.env.DEBUG === "1",
+  // 逗号分隔的会话 ID 白名单（conversationId 见日志）；留空 = 允许所有会话
+  allowedConversations: (process.env.ALLOWED_CONVERSATIONS ?? "")
+    .split(",").map((s) => s.trim()).filter(Boolean),
 };
+
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
@@ -76,6 +81,13 @@ const agent = {
   async chat(req) {
     const conv = req.conversationId;
     const tag = `[${conv.slice(0, 10)}]`;
+
+    // 会话白名单：防群聊/陌生人触发 pi（= 远程执行任意命令）
+    if (config.allowedConversations.length && !config.allowedConversations.includes(conv)) {
+      log(tag, "🔒 拒绝未授权会话");
+      return { text: "🔒 未授权的会话，已拒绝执行。如需使用请联系管理员。" };
+    }
+
     const client = pool.get(conv);
     try {
       let text = req.text ?? "";
@@ -86,7 +98,7 @@ const agent = {
           images = [{
             type: "image",
             data: data.toString("base64"),
-            mimeType: req.media.mimeType ?? "image/jpeg",
+            mimeType: await detectImageMime(req.media.filePath),
           }];
           log(tag, `收到图片 ${req.media.filePath}`);
         } else {
@@ -121,6 +133,22 @@ process.on("SIGINT", () => {
   log("正在退出…");
   pool.closeAll();
   process.exit(0);
+});
+
+// 防止桥进程异常退出时留下孤儿 pi 子进程（它们会继续跑任务、烧 API 额度）
+function cleanup() {
+  try {
+    pool.closeAll();
+  } catch { /* 忽略 */ }
+}
+process.on("exit", cleanup);
+process.on("uncaughtException", (err) => {
+  log("未捕获异常:", err);
+  cleanup();
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason) => {
+  log("未处理拒绝:", reason?.message ?? reason);
 });
 
 try {
