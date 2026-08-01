@@ -15,10 +15,14 @@
  */
 import { login, start, isLoggedIn } from "weixin-agent-sdk";
 import { readFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { PiPool } from "./pi-rpc.mjs";
 
+const DEFAULT_CWD = path.join(os.homedir(), "PersonalFiles", "Code");
+
 const config = {
-  cwd: process.env.PI_CWD ?? process.cwd(),
+  cwd: process.env.PI_CWD ?? DEFAULT_CWD,
   approve: process.env.PI_APPROVE !== "0",
   autoConfirm: process.env.AUTO_CONFIRM === "1",
   idleMinutes: Number(process.env.IDLE_TIMEOUT_MIN ?? 30),

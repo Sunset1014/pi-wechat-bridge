@@ -47,7 +47,7 @@ npm start
 
 | 变量 | 默认 | 说明 |
 |------|------|------|
-| `PI_CWD` | 本目录 | pi 的工作目录（要 pi 操作哪个项目就设成哪个目录） |
+| `PI_CWD` | `~/PersonalFiles/Code` | pi 的工作目录（要 pi 操作哪个项目就设成哪个目录） |
 | `PI_APPROVE` | `1` | 信任项目本地文件（AGENTS.md 等） |
 | `AUTO_CONFIRM` | `0` | 自动确认 pi 的危险命令确认框。默认自动**拒绝**，遇到被拒可手动告诉 pi 换个安全做法 |
 | `IDLE_TIMEOUT_MIN` | `30` | 会话空闲回收（分钟） |
